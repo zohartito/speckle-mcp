@@ -77,7 +77,7 @@ Once published or from the local checkout, register it with:
 ```bash
 claude mcp add speckle \
   --env SPECKLE_TOKEN=your-personal-access-token \
-  -- uvx --from /Users/zohartito/projects/speckle-mcp speckle-mcp
+  -- uvx --from /path/to/speckle-mcp speckle-mcp
 ```
 
 (Replace the path with the install location. `--env SPECKLE_SERVER_URL=...` too if
@@ -91,7 +91,7 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
   "mcpServers": {
     "speckle": {
       "command": "uvx",
-      "args": ["--from", "/Users/zohartito/projects/speckle-mcp", "speckle-mcp"],
+      "args": ["--from", "/path/to/speckle-mcp", "speckle-mcp"],
       "env": { "SPECKLE_TOKEN": "your-personal-access-token" }
     }
   }
