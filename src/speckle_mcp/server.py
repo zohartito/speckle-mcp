@@ -20,7 +20,8 @@ from typing import Callable, TypeVar
 
 from mcp.server.mcpserver import MCPServer
 from specklepy.api import operations
-from specklepy.core.api.inputs.user_inputs import UserProjectsFilter
+from specklepy.api.inputs.user_inputs import UserProjectsFilter
+from specklepy.logging import metrics
 from specklepy.transports.server import ServerTransport
 
 from . import formatting
@@ -36,6 +37,10 @@ server = MCPServer(
         "personal access token."
     ),
 )
+
+# specklepy reports usage to Speckle's analytics host by default. A read-only tool an
+# agent calls should not phone home on the user's behalf.
+metrics.disable()
 
 _conn = connection_from_env()
 
@@ -95,7 +100,9 @@ def speckle_whoami() -> str:
 @safe_tool
 def speckle_list_projects(search: str = "", limit: int = 25) -> str:
     client = _conn.authenticated_client()
-    projects_filter = UserProjectsFilter(search=search) if search else None
+    # include_implicit_access: projects reached through workspace membership. Without
+    # it the server lists only projects the user was added to one by one.
+    projects_filter = UserProjectsFilter(search=search or None, include_implicit_access=True)
     result = client.active_user.get_projects(limit=limit, filter=projects_filter)
     return formatting.format_projects(
         result.items, result.total_count, _conn.server_label, search
