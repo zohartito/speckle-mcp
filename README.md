@@ -57,9 +57,10 @@ be built and tested without any desktop application open.
 Authentication is via environment variables. **You must create the token yourself —
 it is never hardcoded or committed.**
 
-1. Create a personal access token at <https://app.speckle.systems/profile> (the
-   `project.core.read` scope is enough for this read-only server — it grants read
-   access to your projects, models, versions, and objects).
+1. Create a personal access token under **Settings → Developer → Access tokens** on
+   your Speckle server. Read-only scopes are enough. The live run recorded below used
+   three: Projects → Core → Read (`project.core.read`), Workspaces → Core → Read and
+   Account → Profile → Read. A smaller set was not tried.
 2. Provide it via the environment:
 
    ```bash
@@ -116,8 +117,32 @@ python -m pytest -v
   official MCP client, calls `tools/list`, and asserts all seven tools are
   advertised with correct input schemas — proving the MCP wiring works without a
   token.
+- **Tool tests** (`test_server_tools.py`) cover the two behaviours the first live run
+  found wrong (see below) and check that usage tracking is off. No network needed.
 - **Live check** (`scripts/live_check.py`) hits the public `server.get()` endpoint
-  (no auth) end to end. Authenticated tools await your token.
+  (no auth) end to end, and with `SPECKLE_TOKEN` set runs all seven tools against the
+  first project that has a published version.
+
+### Live run, 2026-11-15
+
+All seven tools were run against app.speckle.systems (server 2026.11.0) with a
+read-only token, on the sample project a new workspace's sandbox comes with (one
+Rhino model, one Revit model). That is one server, one account and sample data, not
+a range of real projects.
+
+The first run found two failures, both fixed in this version:
+
+- `speckle_list_projects` returned nothing for a project reached through workspace
+  membership. It now asks for projects with implicit access too.
+- `speckle_object_data` failed with `BUNDLE_REFERENCE_NOT_FOUND`. Current Speckle
+  servers store a version as a `bundle.*` reference, which specklepy reads from
+  2026.9 on with its `bundle` extra (pyarrow). The dependency is now
+  `specklepy[bundle]>=2026.9.2`.
+
+### Usage tracking
+
+specklepy reports usage to Speckle's analytics host by default. This server turns
+that off at start-up (`metrics.disable()`).
 
 ## License
 
