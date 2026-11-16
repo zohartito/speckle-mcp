@@ -19,6 +19,7 @@ import sys
 from typing import Callable, TypeVar
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from specklepy.api import operations
 from specklepy.api.inputs.user_inputs import UserProjectsFilter
 from specklepy.logging import metrics
@@ -48,19 +49,19 @@ _F = TypeVar("_F", bound=Callable[..., str])
 
 
 def safe_tool(fn: _F) -> _F:
-    """Turn any exception raised by a tool into readable text.
+    """Turn any exception raised by a tool into a readable MCP tool error.
 
-    MCP tools should return a message rather than crash the call, and an
-    authentication problem deserves a clearer note than a raw traceback.
+    The SDK reports ToolError as is_error=True without crashing the server.
+    Authentication problems retain a clearer note than a raw traceback.
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
         except SpeckleAuthError as exc:
-            return f"Authentication error: {exc}"
+            raise ToolError(f"Authentication error: {exc}") from exc
         except Exception as exc:  # surfaced to the caller as tool output
-            return f"Error: {exc}"
+            raise ToolError(f"Error: {exc}") from exc
 
     return wrapper  # type: ignore[return-value]
 
