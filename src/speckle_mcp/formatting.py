@@ -166,7 +166,7 @@ def base_to_dict(base: Any, max_depth: int = 2, max_children: int = 25) -> Any:
     """Recursively convert a specklepy ``Base`` into a plain, size-capped structure.
 
     A ``Base`` is detected by its ``get_member_names`` method. Nesting beyond
-    ``max_depth`` is collapsed to a stub, and lists/dicts are truncated to
+    ``max_depth`` (including lists/dicts/tuples) is collapsed to a stub, and lists/dicts are truncated to
     ``max_children`` entries so a heavy geometry payload stays readable.
     """
     def convert(value: Any, depth: int) -> Any:
@@ -183,12 +183,16 @@ def base_to_dict(base: Any, max_depth: int = 2, max_children: int = 25) -> Any:
                 result[name] = convert(getattr(value, name, None), depth + 1)
             return result
         if isinstance(value, (list, tuple)):
-            capped = [convert(item, depth) for item in list(value)[:max_children]]
+            if depth > max_depth:
+                return {"_truncated": "max depth reached"}
+            capped = [convert(item, depth + 1) for item in list(value)[:max_children]]
             if len(value) > max_children:
                 capped.append(f"...(+{len(value) - max_children} more of {len(value)})")
             return capped
         if isinstance(value, dict):
-            trimmed = {k: convert(v, depth) for k, v in list(value.items())[:max_children]}
+            if depth > max_depth:
+                return {"_truncated": "max depth reached"}
+            trimmed = {k: convert(v, depth + 1) for k, v in list(value.items())[:max_children]}
             if len(value) > max_children:
                 trimmed["_truncated"] = f"+{len(value) - max_children} more keys"
             return trimmed

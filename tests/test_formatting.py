@@ -6,6 +6,7 @@ plus a real specklepy ``Base`` for ``base_to_dict``. No network involved.
 
 from types import SimpleNamespace
 
+import pytest
 from specklepy.objects.base import Base
 
 from speckle_mcp import formatting
@@ -99,6 +100,41 @@ def test_base_to_dict_truncates_beyond_max_depth():
 
     data = formatting.base_to_dict(root, max_depth=0)
     assert data["child"]["_truncated"] == "max depth reached"
+
+
+@pytest.mark.parametrize("container", [{"nested": {"value": "deep"}}, [[["deep"]]], (("deep",),)])
+def test_base_to_dict_caps_plain_containers_at_zero_depth(container):
+    root = Base()
+    root.properties = container
+    assert formatting.base_to_dict(root, max_depth=0)["properties"] == {
+        "_truncated": "max depth reached"
+    }
+
+
+def test_base_to_dict_counts_mixed_container_depth():
+    child = Base()
+    child.value = "deep"
+    root = Base()
+    root.properties = {"items": [child, {"nested": ["deep"]}]}
+    data = formatting.base_to_dict(root, max_depth=2)
+    items = data["properties"]["items"]
+    assert items[0]["_truncated"] == "max depth reached"
+    assert items[1] == {"_truncated": "max depth reached"}
+    assert formatting.base_to_dict(root, max_depth=3)["properties"]["items"][0]["value"] == "deep"
+
+
+def test_base_to_dict_bounds_deep_and_cyclic_plain_containers():
+    nested = {}
+    cursor = nested
+    for _ in range(40):
+        cursor["next"] = {}
+        cursor = cursor["next"]
+    assert formatting.base_to_dict(nested, max_depth=0) == {
+        "next": {"_truncated": "max depth reached"}
+    }
+    cycle = []
+    cycle.append(cycle)
+    assert formatting.base_to_dict(cycle, max_depth=0) == [{"_truncated": "max depth reached"}]
 
 
 def test_format_object_data_wraps_json_and_caps_size():
