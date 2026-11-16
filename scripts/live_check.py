@@ -23,6 +23,14 @@ def _section(title: str) -> None:
 
 
 def main() -> int:
+    try:
+        return _run()
+    except Exception as exc:
+        print(f"Live check failed: {exc}")
+        return 1
+
+
+def _run() -> int:
     _section("speckle_server_info (no auth)")
     print(server.speckle_server_info())
 

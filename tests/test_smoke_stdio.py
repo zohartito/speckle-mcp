@@ -51,3 +51,31 @@ def test_schema_survives_the_error_wrapper():
     props = set(schema.get("properties", {}))
     assert {"project_id", "version_id", "max_depth", "max_children"} <= props
     assert set(schema.get("required", [])) >= {"project_id", "version_id"}
+
+
+async def _call_without_token():
+    env = dict(os.environ)
+    env.pop("SPECKLE_TOKEN", None)
+    params = StdioServerParameters(command=sys.executable, args=["-m", "speckle_mcp.server"], env=env)
+    calls = {
+        "speckle_whoami": {},
+        "speckle_list_projects": {},
+        "speckle_project_details": {"project_id": "p1"},
+        "speckle_list_models": {"project_id": "p1"},
+        "speckle_model_versions": {"project_id": "p1", "model_id": "m1"},
+        "speckle_object_data": {"project_id": "p1", "version_id": "v1"},
+    }
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            return {name: await session.call_tool(name, args) for name, args in calls.items()}
+
+
+def test_missing_token_calls_are_mcp_errors():
+    results = asyncio.run(_call_without_token())
+    assert len(results) == 6
+    assert all(result.is_error for result in results.values()), {
+        name: result.is_error for name, result in results.items()
+    }
+    for result in results.values():
+        assert "Authentication error: No Speckle token configured" in result.content[0].text
