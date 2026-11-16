@@ -69,7 +69,8 @@ it is never hardcoded or committed.**
    export SPECKLE_SERVER_URL="https://your.speckle.server"
    ```
 
-   Or copy `.env.example` to `.env` and fill it in (`.env` is gitignored).
+   `.env.example` lists the supported variables for reference. .env files are not loaded
+   by the server; export the values as above or configure your MCP client's environment.
 
 ## Install & register with Claude Code
 
