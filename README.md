@@ -49,7 +49,7 @@ be built and tested without any desktop application open.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - A Speckle account and a **personal access token** (see below)
 
 ## Configuration

@@ -3,7 +3,7 @@ name = "speckle-mcp"
 version = "0.1.0"
 description = "Read-only Model Context Protocol server for Speckle (AEC data hub)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Zohar Tito" }]
 keywords = ["speckle", "mcp", "aec", "bim", "architecture", "graphql", "rhino", "revit"]
