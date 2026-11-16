@@ -1,7 +1,7 @@
 """End-to-end smoke test: launch the server over stdio and read its tool list.
 
 This proves the MCP wiring works — the server starts, speaks the protocol, and
-advertises every tool with a correct input schema — without needing a token.
+advertises every tool, and preserves the object-data input schema without a token.
 """
 
 import asyncio

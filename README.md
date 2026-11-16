@@ -9,8 +9,9 @@ graph in plain language: list projects, inspect models, walk version history, an
 pull the actual object data behind a version.
 
 It talks to Speckle's current **Next Gen (v3) GraphQL API** through the official
-[`specklepy`](https://github.com/specklesystems/specklepy) SDK, so it works against
-`app.speckle.systems` or any self-hosted Speckle server.
+[`specklepy`](https://github.com/specklesystems/specklepy) SDK. It has been tested
+against `app.speckle.systems` 2026.11.0. Self-hosted server compatibility, including
+older server versions, has not been verified.
 
 ---
 
@@ -116,10 +117,12 @@ python -m pytest -v
   fields, and `Base` object serialization (depth/children caps). No network needed.
 - **Smoke test** (`test_smoke_stdio.py`) launches the server over stdio with the
   official MCP client, calls `tools/list`, and asserts all seven tools are
-  advertised with correct input schemas — proving the MCP wiring works without a
-  token.
-- **Tool tests** (`test_server_tools.py`) cover the two behaviours the first live run
-  found wrong (see below) and check that usage tracking is off. No network needed.
+  advertised and checks the `speckle_object_data` input schema. It also checks
+  that all six authenticated tools report MCP errors without a token.
+- **Tool tests** (`test_server_tools.py`) cover implicit-access project listing
+  found wrong in the first live run (see below) and check that usage tracking is
+  off. The bundle-reference receive fix is not covered by a regression test.
+  No network needed.
 - **Live check** (`scripts/live_check.py`) hits the public `server.get()` endpoint
   (no auth) end to end. With `SPECKLE_TOKEN` set it paginates projects and models
   to find the first published version and exercise all seven tools. It lists
