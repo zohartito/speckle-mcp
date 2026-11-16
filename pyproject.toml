@@ -15,11 +15,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
+[dependency-groups]
+# editables: hatchling's own requirement for an editable build (pip install -e .)
+build = ["hatchling==1.33.0", "editables~=0.3"]
+audit = ["pip-audit"]
+
 [project.scripts]
 speckle-mcp = "speckle_mcp.server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

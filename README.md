@@ -106,8 +106,23 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 ```bash
 uv venv --python 3.11 .venv
 source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv pip install --require-hashes -r requirements-dev.lock
+uv pip install --no-deps --no-build-isolation -e .
 python -m pytest -v
+```
+
+`requirements-dev.lock` pins and hashes the runtime, test, build and audit
+dependencies used by CI. The local package is built with the locked Hatchling
+version, without isolated build-time resolution. The `uvx --from` registration
+above resolves dependencies afresh; for a locked installation, use these steps
+and configure your MCP client to run `/path/to/speckle-mcp/.venv/bin/speckle-mcp`.
+
+To deliberately refresh the lock and audit it (the audit queries public advisory
+services):
+
+```bash
+uv pip compile pyproject.toml --extra dev --group build --group audit --python-version 3.11 --universal --generate-hashes --no-annotate --no-header -o requirements-dev.lock
+python -m pip_audit --no-deps --disable-pip -r requirements-dev.lock
 ```
 
 ### Test coverage
