@@ -121,8 +121,10 @@ python -m pytest -v
 - **Tool tests** (`test_server_tools.py`) cover the two behaviours the first live run
   found wrong (see below) and check that usage tracking is off. No network needed.
 - **Live check** (`scripts/live_check.py`) hits the public `server.get()` endpoint
-  (no auth) end to end, and with `SPECKLE_TOKEN` set runs all seven tools against the
-  first project that has a published version.
+  (no auth) end to end. With `SPECKLE_TOKEN` set it paginates projects and models
+  to find the first published version and exercise all seven tools. It lists
+  exercised/skipped tools, including when no version is found, and exits nonzero
+  on a failed check.
 
 ### Live run, 2026-11-15
 
