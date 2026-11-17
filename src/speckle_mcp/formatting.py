@@ -9,11 +9,38 @@ nulls.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 # Cap for the JSON blob emitted by ``format_object_data`` so a large model does
 # not flood the conversation. Depth/children caps happen earlier in base_to_dict.
 _OBJECT_JSON_CHAR_LIMIT = 12000
+
+# Terminal escape sequences: OSC/DCS/SOS/PM/APC strings (OSC 52 writes the
+# clipboard), CSI (ESC[8m hides text), their 8-bit forms, and other ESC pairs.
+_ANSI_ESCAPE = re.compile(
+    r"\x1b[\]PX^_][^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c)?"
+    r"|[\x90\x98\x9d-\x9f][^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c)?"
+    r"|(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]"
+    r"|\x1b[ -~]?"
+)
+# Characters a reader cannot see but a model still reads: C0 controls except
+# \n and \t, DEL, C1, zero-width, bidi overrides/isolates, BOM and tag characters.
+_INVISIBLE = re.compile(
+    "[\x00-\x08\x0b-\x1f\x7f-\x9f\u200b-\u200f\u202a-\u202e"
+    "\u2066-\u2069\ufeff\U000e0000-\U000e007f]"
+)
+
+
+def sanitize_text(value: Any) -> str:
+    """Drop escape sequences and invisible characters from server-supplied text.
+
+    Speckle names, messages and properties are user-written, so they can hide
+    instructions from the person watching while the model still reads them.
+    Hidden characters are removed outright; visible text is kept unchanged.
+    """
+    text = "" if value is None else str(value)
+    return _INVISIBLE.sub("", _ANSI_ESCAPE.sub("", text))
 
 
 def _fmt_dt(value: Any) -> str:
@@ -25,7 +52,7 @@ def _fmt_dt(value: Any) -> str:
 
 def _clean(value: Any) -> str:
     """Return a stripped string, or ``N/A`` for empty/None values."""
-    text = (str(value).strip() if value is not None else "")
+    text = sanitize_text(value).strip()
     return text or "N/A"
 
 
@@ -37,14 +64,18 @@ def _md_table(rows: list[dict[str, Any]], columns: list[str]) -> str:
     divider = "| " + " | ".join("---" for _ in columns) + " |"
     lines = [header, divider]
     for row in rows:
-        cells = [str(row.get(col, "")).replace("|", "\\|") for col in columns]
+        cells = [
+            sanitize_text(str(row.get(col, "")).replace("\r", " ").replace("\n", " "))
+            .replace("|", "\\|")
+            for col in columns
+        ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
 
 
 def format_server_info(info: Any, server_label: str) -> str:
     return (
-        f"# Speckle server: {getattr(info, 'name', 'Unknown')}\n\n"
+        f"# Speckle server: {sanitize_text(getattr(info, 'name', 'Unknown'))}\n\n"
         f"- **URL:** {server_label}\n"
         f"- **Version:** {_clean(getattr(info, 'version', None))}\n"
         f"- **Company:** {_clean(getattr(info, 'company', None))}\n"
@@ -54,8 +85,8 @@ def format_server_info(info: Any, server_label: str) -> str:
 
 def format_user(user: Any, server_label: str) -> str:
     return (
-        f"# Authenticated as {getattr(user, 'name', 'Unknown')}\n\n"
-        f"- **ID:** `{getattr(user, 'id', 'N/A')}`\n"
+        f"# Authenticated as {sanitize_text(getattr(user, 'name', 'Unknown'))}\n\n"
+        f"- **ID:** `{sanitize_text(getattr(user, 'id', 'N/A'))}`\n"
         f"- **Email:** {_clean(getattr(user, 'email', None))}\n"
         f"- **Company:** {_clean(getattr(user, 'company', None))}\n"
         f"- **Role:** {_clean(getattr(user, 'role', None))}\n"
@@ -64,6 +95,7 @@ def format_user(user: Any, server_label: str) -> str:
 
 
 def format_projects(items: list, total: int, server_label: str, search: str = "") -> str:
+    search = sanitize_text(search)
     if not items:
         target = f" matching '{search}'" if search else ""
         return f"No projects{target} found on {server_label}."
@@ -82,9 +114,9 @@ def format_projects(items: list, total: int, server_label: str, search: str = ""
 
 
 def format_project_details(project: Any, server_label: str) -> str:
-    project_id = getattr(project, "id", "?")
+    project_id = sanitize_text(getattr(project, "id", "?"))
     lines = [
-        f"# Project: {getattr(project, 'name', 'Unnamed')}",
+        f"# Project: {sanitize_text(getattr(project, 'name', 'Unnamed'))}",
         "",
         f"- **ID:** `{project_id}`",
         f"- **Description:** {_clean(getattr(project, 'description', None))}",
@@ -113,6 +145,7 @@ def format_project_details(project: Any, server_label: str) -> str:
 
 
 def format_models(items: list, total: int, project_id: str, project_name: str) -> str:
+    project_name = sanitize_text(project_name)
     if not items:
         return f"Project **{project_name}** (`{project_id}`) has no models yet."
     rows = [{
@@ -129,9 +162,9 @@ def format_models(items: list, total: int, project_id: str, project_name: str) -
 
 def format_model_versions(model: Any, project_id: str) -> str:
     lines = [
-        f"# Model: {getattr(model, 'name', 'Unnamed')}",
+        f"# Model: {sanitize_text(getattr(model, 'name', 'Unnamed'))}",
         "",
-        f"- **ID:** `{getattr(model, 'id', '?')}`",
+        f"- **ID:** `{sanitize_text(getattr(model, 'id', '?'))}`",
         f"- **Project:** `{project_id}`",
         f"- **Description:** {_clean(getattr(model, 'description', None))}",
         "",
@@ -180,7 +213,7 @@ def base_to_dict(base: Any, max_depth: int = 2, max_children: int = 25) -> Any:
                 }
             result: dict[str, Any] = {}
             for name in get_members():
-                result[name] = convert(getattr(value, name, None), depth + 1)
+                result[sanitize_text(name)] = convert(getattr(value, name, None), depth + 1)
             return result
         if isinstance(value, (list, tuple)):
             capped = [convert(item, depth) for item in list(value)[:max_children]]
@@ -188,10 +221,15 @@ def base_to_dict(base: Any, max_depth: int = 2, max_children: int = 25) -> Any:
                 capped.append(f"...(+{len(value) - max_children} more of {len(value)})")
             return capped
         if isinstance(value, dict):
-            trimmed = {k: convert(v, depth) for k, v in list(value.items())[:max_children]}
+            trimmed = {
+                sanitize_text(k): convert(v, depth)
+                for k, v in list(value.items())[:max_children]
+            }
             if len(value) > max_children:
                 trimmed["_truncated"] = f"+{len(value) - max_children} more keys"
             return trimmed
+        if isinstance(value, str):
+            return sanitize_text(value)
         return value
 
     return convert(base, 0)
@@ -204,7 +242,7 @@ def format_object_data(
     max_depth: int,
     max_children: int,
 ) -> str:
-    body = json.dumps(data, indent=2, default=str, ensure_ascii=False)
+    body = sanitize_text(json.dumps(data, indent=2, default=str, ensure_ascii=False))
     truncated = ""
     if len(body) > _OBJECT_JSON_CHAR_LIMIT:
         body = body[:_OBJECT_JSON_CHAR_LIMIT]
@@ -213,9 +251,9 @@ def format_object_data(
             "narrow with a lower max_depth or max_children)_"
         )
     return (
-        f"# Object data for version `{getattr(version, 'id', '?')}`\n\n"
+        f"# Object data for version `{sanitize_text(getattr(version, 'id', '?'))}`\n\n"
         f"- **Project:** `{project_id}`\n"
-        f"- **Root object:** `{getattr(version, 'referenced_object', '?')}`\n"
+        f"- **Root object:** `{sanitize_text(getattr(version, 'referenced_object', '?'))}`\n"
         f"- **Source app:** {_clean(getattr(version, 'source_application', None))}\n"
         f"- **Caps:** depth {max_depth}, {max_children} children per collection\n\n"
         f"```json\n{body}\n```{truncated}"
