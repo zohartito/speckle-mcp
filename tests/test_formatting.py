@@ -108,3 +108,77 @@ def test_format_object_data_wraps_json_and_caps_size():
 
     big = formatting.format_object_data(version, {"blob": "x" * 20000}, "p1", 2, 25)
     assert "truncated" in big
+
+
+# Text a terminal hides from the human but a model still reads (ANSI escape injection).
+_HIDDEN = (
+    "\x1b[8mconcealed\x1b[0m"                     # CSI conceal: text becomes visible
+    "\x1b]52;c;ZXZpbA==\x07"                      # OSC 52 clipboard write
+    "\x1b]0;title\x1b\\"                          # OSC terminated by ST
+    "\x00\x07\x0b\x0c\r\x7f\x85\x9b31m"           # C0, DEL, C1 (incl. 8-bit CSI)
+    + "".join(chr(c) for c in (0x200B, 0x200D, 0x200F, 0xFEFF))  # zero-width / BOM
+    + "".join(chr(c) for c in (0x202A, 0x202E, 0x2066, 0x2069))  # bidi
+    + "".join(chr(c) for c in (0xE0000, 0xE0041, 0xE007F))       # tag characters
+)
+
+
+def _assert_clean(out):
+    for ch in out:
+        code = ord(ch)
+        assert ch in "\n\t" or code >= 0x20, repr(ch)
+        assert not 0x7F <= code <= 0x9F, repr(ch)
+        assert not 0x200B <= code <= 0x200F and code != 0xFEFF, repr(ch)
+        assert not 0x202A <= code <= 0x202E and not 0x2066 <= code <= 0x2069, repr(ch)
+        assert not 0xE0000 <= code <= 0xE007F, repr(ch)
+    assert "ZXZpbA" not in out and "title" not in out  # OSC payloads dropped
+
+
+def test_sanitize_text_drops_hidden_and_keeps_visible():
+    out = formatting.sanitize_text("Müller 東京 " + _HIDDEN + "café\n\tok")
+    assert out == "Müller 東京 concealedcafé\n\tok"  # hidden chars dropped, not marked
+    assert formatting.sanitize_text(None) == ""
+    assert formatting.sanitize_text("\x1b[1;31mred\x1b[0m") == "red"
+
+
+def test_md_table_flattens_newlines_in_cells():
+    table = formatting._md_table([{"a": "line1\r\nline2\x1b[0m"}], ["a"])
+    assert table.splitlines()[-1] == "| line1  line2 |"
+
+
+def test_every_formatter_strips_hidden_text():
+    h = "Müller" + _HIDDEN
+    version = SimpleNamespace(id="v1" + _HIDDEN, message="msg\n" + h, source_application=h,
+                              created_at=None, referenced_object="o" + _HIDDEN,
+                              author_user=SimpleNamespace(name=h))
+    model = SimpleNamespace(name=h, id="m1" + _HIDDEN, description=h, updated_at=None,
+                            versions=_collection([version]))
+    project = SimpleNamespace(id="p1" + _HIDDEN, name=h, description=h, visibility=h, role=h,
+                              created_at=None, updated_at=None, models=_collection([model]))
+    root = Base()
+    root.name = h
+    root.props = {"k" + _HIDDEN: [h]}
+    data = formatting.base_to_dict(root)
+    outputs = [
+        formatting.format_server_info(
+            SimpleNamespace(name=h, version=h, company=h, description=h), "https://s"),
+        formatting.format_user(SimpleNamespace(name=h, id=h, email=h, company=h, role=h), "https://s"),
+        formatting.format_projects([project], 1, "https://s", search=h),
+        formatting.format_projects([], 0, "https://s", search=h),
+        formatting.format_project_details(project, "https://s"),
+        formatting.format_models([model], 1, "p1", h),
+        formatting.format_models([], 0, "p1", h),
+        formatting.format_model_versions(model, "p1"),
+        formatting.format_object_data(version, data, "p1", 2, 25),
+    ]
+    for out in outputs:
+        _assert_clean(out)
+        assert "Müller" in out
+    assert data["name"] == "Müllerconcealed"
+
+
+def test_format_object_data_strips_invisible_chars_json_leaves_raw():
+    # json.dumps escapes C0 itself, but bidi, zero-width and tag characters pass through raw.
+    hidden = "".join(chr(c) for c in (0x202E, 0x200B, 0xE0041))
+    version = SimpleNamespace(id="v1", referenced_object="o", source_application="Rhino")
+    out = formatting.format_object_data(version, {"name": "Wall" + hidden}, "p1", 2, 25)
+    assert '"name": "Wall"' in out
