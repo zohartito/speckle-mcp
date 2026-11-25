@@ -59,9 +59,9 @@ def safe_tool(fn: _F) -> _F:
         try:
             return fn(*args, **kwargs)
         except SpeckleAuthError as exc:
-            raise ToolError(f"Authentication error: {exc}") from exc
+            raise ToolError(f"Authentication error: {formatting.sanitize_text(exc)}") from exc
         except Exception as exc:  # surfaced to the caller as tool output
-            raise ToolError(f"Error: {exc}") from exc
+            raise ToolError(f"Error: {formatting.sanitize_text(exc)}") from exc
 
     return wrapper  # type: ignore[return-value]
 
