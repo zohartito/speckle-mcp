@@ -9,8 +9,9 @@ graph in plain language: list projects, inspect models, walk version history, an
 pull the actual object data behind a version.
 
 It talks to Speckle's current **Next Gen (v3) GraphQL API** through the official
-[`specklepy`](https://github.com/specklesystems/specklepy) SDK, so it works against
-`app.speckle.systems` or any self-hosted Speckle server.
+[`specklepy`](https://github.com/specklesystems/specklepy) SDK. It has been tested
+against `app.speckle.systems` 2026.11.0. Self-hosted server compatibility, including
+older server versions, has not been verified.
 
 ---
 
@@ -49,7 +50,7 @@ be built and tested without any desktop application open.
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.11+
 - A Speckle account and a **personal access token** (see below)
 
 ## Configuration
@@ -69,7 +70,8 @@ it is never hardcoded or committed.**
    export SPECKLE_SERVER_URL="https://your.speckle.server"
    ```
 
-   Or copy `.env.example` to `.env` and fill it in (`.env` is gitignored).
+   `.env.example` lists the supported variables for reference. .env files are not loaded
+   by the server; export the values as above or configure your MCP client's environment.
 
 ## Install & register with Claude Code
 
@@ -104,8 +106,23 @@ For **Claude Desktop**, add to `claude_desktop_config.json`:
 ```bash
 uv venv --python 3.11 .venv
 source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv pip install --require-hashes -r requirements-dev.lock
+uv pip install --no-deps --no-build-isolation -e .
 python -m pytest -v
+```
+
+`requirements-dev.lock` pins and hashes the runtime, test, build and audit
+dependencies used by CI. The local package is built with the locked Hatchling
+version, without isolated build-time resolution. The `uvx --from` registration
+above resolves dependencies afresh; for a locked installation, use these steps
+and configure your MCP client to run `/path/to/speckle-mcp/.venv/bin/speckle-mcp`.
+
+To deliberately refresh the lock and audit it (the audit queries public advisory
+services):
+
+```bash
+uv pip compile pyproject.toml --extra dev --group build --group audit --python-version 3.11 --universal --generate-hashes --no-annotate --no-header -o requirements-dev.lock
+python -m pip_audit --no-deps --disable-pip -r requirements-dev.lock
 ```
 
 ### Test coverage
@@ -115,13 +132,17 @@ python -m pytest -v
   fields, and `Base` object serialization (depth/children caps). No network needed.
 - **Smoke test** (`test_smoke_stdio.py`) launches the server over stdio with the
   official MCP client, calls `tools/list`, and asserts all seven tools are
-  advertised with correct input schemas — proving the MCP wiring works without a
-  token.
-- **Tool tests** (`test_server_tools.py`) cover the two behaviours the first live run
-  found wrong (see below) and check that usage tracking is off. No network needed.
+  advertised and checks the `speckle_object_data` input schema. It also checks
+  that all six authenticated tools report MCP errors without a token.
+- **Tool tests** (`test_server_tools.py`) cover implicit-access project listing
+  found wrong in the first live run (see below) and check that usage tracking is
+  off. The bundle-reference receive fix is not covered by a regression test.
+  No network needed.
 - **Live check** (`scripts/live_check.py`) hits the public `server.get()` endpoint
-  (no auth) end to end, and with `SPECKLE_TOKEN` set runs all seven tools against the
-  first project that has a published version.
+  (no auth) end to end. With `SPECKLE_TOKEN` set it paginates projects and models
+  to find the first published version and exercise all seven tools. It lists
+  exercised/skipped tools, including when no version is found, and exits nonzero
+  on a failed check.
 
 ### Live run, 2026-11-15
 

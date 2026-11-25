@@ -1,6 +1,7 @@
 """Tests for connection/URL handling and the no-token auth path (no network)."""
 
 import pytest
+from pathlib import Path
 
 from speckle_mcp.speckle import (
     SpeckleAuthError,
@@ -41,3 +42,18 @@ def test_connection_from_env_defaults_to_public_server(monkeypatch):
     conn = connection_from_env()
     assert conn.server_label == "https://app.speckle.systems"
     assert conn.has_token is False
+
+
+def test_dotenv_is_not_loaded_and_configuration_documents_exports(monkeypatch, tmp_path):
+    monkeypatch.delenv("SPECKLE_TOKEN", raising=False)
+    monkeypatch.delenv("SPECKLE_SERVER_URL", raising=False)
+    (tmp_path / ".env").write_text(
+        "SPECKLE_TOKEN=synthetic-test-value\nSPECKLE_SERVER_URL=http://127.0.0.1:9\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    conn = connection_from_env()
+    assert conn.has_token is False
+    assert conn.server_label == "https://app.speckle.systems"
+    root = Path(__file__).resolve().parents[1]
+    assert ".env files are not loaded" in (root / "README.md").read_text()
+    assert ".env files are not loaded" in (root / ".env.example").read_text()

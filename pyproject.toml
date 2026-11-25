@@ -3,7 +3,7 @@ name = "speckle-mcp"
 version = "0.1.0"
 description = "Read-only Model Context Protocol server for Speckle (AEC data hub)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Zohar Tito" }]
 keywords = ["speckle", "mcp", "aec", "bim", "architecture", "graphql", "rhino", "revit"]
@@ -15,11 +15,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
+[dependency-groups]
+# editables: hatchling's own requirement for an editable build (pip install -e .)
+build = ["hatchling==1.33.0", "editables~=0.3"]
+audit = ["pip-audit"]
+
 [project.scripts]
 speckle-mcp = "speckle_mcp.server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
