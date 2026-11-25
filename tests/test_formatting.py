@@ -209,7 +209,7 @@ def test_sanitize_text_drops_hidden_and_keeps_visible():
 
 def test_md_table_flattens_newlines_in_cells():
     table = formatting._md_table([{"a": "line1\r\nline2\x1b[0m"}], ["a"])
-    assert table.splitlines()[-1] == "| line1  line2 |"
+    assert table.splitlines()[-1] == '| "line1 line2" |'
 
 
 def test_every_formatter_strips_hidden_text():
